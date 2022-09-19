@@ -1,0 +1,1323 @@
+﻿Course Learning Objectives
+The course will cover the following:
+
+Prometheus architecture
+Setting up and using Prometheus
+Monitoring core system components and services
+Basic and advanced querying
+Creating dashboards
+Instrumenting services and writing third-party integrations
+Alerting
+Using Prometheus with Kubernetes
+Advanced operational aspects
+
+By the end of this chapter, you should be able to:
+
+Explain why systems and service monitoring is important.
+Discuss the benefits and downsides of different monitoring approaches.
+Discuss example implementations for each monitoring approach.
+Explain how Prometheus fits into the monitoring landscape.
+
+IT Systems Landscape
+From small companies, to large corporations, most organizations nowadays depend on the IT infrastructure for their daily business. This is true whether a company is in the IT sector itself or not. Some examples are:
+
+The website of an online store
+A database that stores and processes financial transactions
+A datacenter network
+A web API for retrieving meteorological data
+A multiplayer game server
+A virtual machine cloud provider
+A computer that controls car production lines
+And many more.
+As a consequence of IT systems becoming a vital part of many businesses, it is increasingly important to ensure that these systems work reliably and as expected.​​​​​​​
+
+
+IT Systems Goals
+Whenever an IT system becomes vital for the fulfillment of business operations (or some other endeavor), you will want to ensure that the system's behavior is:
+
+Reliable
+Fast
+Efficient
+Correct.
+However, the reality is that systems are brittle and quickly become complex and hard to understand and maintain. In large systems, partial failures are the norm, rather than the exception. Even if the system as a whole is still performing its job, it might be in a partially degraded state, where it works inefficiently, or is about to fail completely.
+
+
+Examples of System Problems
+Some examples of common system and service failures include:
+
+A full disk prevents new data from being stored
+A faulty network switch prevents services from communicating
+Unexpectedly high user traffic overloads a website's database
+A bug in a software component causes it to crash
+High temperature in a datacenter causes hardware to fail.
+
+
+Systems and Service Monitoring
+In order to predict and detect faults that could impede business operations, you need to gain continuous insight into the health of systems and their environments. You will also want to alert people or automatic remedial systems of any detected faults. Systems and service monitoring software (such as Prometheus) help you do both. Besides detecting faults, it can also help you gain overall insight into the performance of systems that can help you improve them operationally.
+
+To ensure the healthy operation of a system or service, you need to monitor its core system parameters. Some examples of parameters that you might want to measure in systems and services are:
+
+The rate of incoming web requests
+The latency with which requests are handled
+The rate of request handling errors
+The usage and saturation of resources (like disks, queues, memory, or CPU cores)
+Temperature, humidity, and more.
+When one of these parameters is behaving unexpectedly, you may then decide to automatically alert a person or take auto-remedial actions
+
+
+Types of Monitoring
+The term monitoring means different things to different people, and there are multiple approaches to getting insight into your systems and acting on it. Lately, the term observability has also sprung up in the IT world, which more generally describes what facilities a system offers to be observed and understood in its behavior. Some of these approaches are competing or even clearly obsolete earlier approaches, while others are complementary and are used together.
+
+Some of the common approaches to continuous systems monitoring are:
+
+Check-based fault detection
+Log-based monitoring
+Metrics-based monitoring
+Request tracing.
+We will discuss each of these approaches in the following pages.
+
+There are also other mechanisms for gaining insight into systems that an operator usually only activates on an ad-hoc basis, since running them all the time would be too expensive or disruptive to the running system. Examples include:
+
+Attaching a debugger to a process
+Profiling a program
+Tracing the full execution details or all system calls of a process.
+These mechanisms do not typically play a part in online systems monitoring, but can be vital in uncovering the underlying cause of a problem once it has been detected.
+
+
+
+
+Check-Based Fault Detection
+Check-based fault detection is a type of monitoring in which the monitoring system executes periodic check scripts on hosts to ensure that the hosts and services running on them are currently up, running, and healthy (for example: is the Apache web server process running?). When a check fails, the monitoring system sends a notification to an operator who then takes action. The most well-known example of a check-based monitoring system is Nagios, which presents its view of the current health of a host and its services like this:
+
+ 
+
+
+Nagios Host Check View - Screenshot
+
+ 
+
+In these check-based monitoring tools, there is usually little emphasis on historical data or basing fault detection on a unified, aggregated, or otherwise flexibly-derived view of an entire system or service over time and across machines. Instead, they mostly focus on reporting only the current and local health of components. Check-based tools also fall into the category of black-box monitoring software, since they probe a service from the outside rather than gathering detailed instrumentation from inside a service. Thus, the level of insight they can provide is limited.
+
+Check-based tools like Nagios were originally built to monitor relatively static computing environments, in which machines had a designated purpose (database server, web server, proxy server, etc.) and where the overall topology changed infrequently. Because of their limited abilities and often static configuration, they break down in modern dynamic computing environments, especially when cluster orchestrators like Kubernetes come into play. Besides not coping well with the dynamic nature of such environments, check-based systems also don't provide deep enough insight into the health of the components they monitor to formulate the most precise and actionable alerts.
+
+
+Log- or Event-Based Monitoring
+Log- or event-based monitoring means collecting detailed information about all relevant events (e.g. all processed HTTP requests) that happen in a system and processing them either for general insight or for alerting. For example, an Apache web server logs all requests it processes into a file, and you might be interested in detecting requests which take too long to handle:
+
+ 
+
+
+Apache web server logs (Screenshot)
+
+ 
+
+Often, log-based monitoring involves processing pipelines that ship and transform logs or structured events to a central log-storage system such as Elasticsearch. You can then display derived information like request rates or latencies in dashboards such as Kibana or base automated alerts on the collected event data.
+
+Raw event data provides extremely detailed insight into a system, but shipping, storing, and processing all individual events becomes very expensive once a system generates a high volume of events. This is especially true for high-traffic websites, where the cost of log processing is directly proportional to your user traffic. Besides the high compute resource costs, this also means that you will need to operate complex multi-node clustered storage systems to store and process your logs. Thus, it's often unrealistic to base your main production monitoring on logs alone, and you have to choose carefully where the level of insight that logs can provide is really worth it. Still, it's common to see logs-based solutions being used for a subset of monitoring use cases.
+
+
+Metrics-Based Monitoring
+Metrics-based monitoring periodically samples the current numeric value of an evolving measurement (such as the current memory usage or the total number of handled HTTP requests for every URL path) and appends the resulting sample to a time series database. You can then display the collected historical information in dashboards like Grafana and define alerts on it.
+
+ 
+
+
+Prometheus time-series data as displayed in Grafana (Screenshot)
+
+ 
+
+The difference to log-based monitoring is that metrics lose per-event granularity and only represent pre-aggregated numeric data. For example, in the case of HTTP requests, metrics do not record all fields (e.g. client IP address, path, HTTP method, request duration) for every individual request, but only count the total number of requests handled so far. Still, modern time series databases allow you to split up those counts by common low-cardinality fields (called "dimensions" or "labels"), like the HTTP method or the response status code, and thus, allow you to retain some level of detail.​
+
+Especially in high-traffic environments, metrics can be orders of magnitude cheaper than logs to collect, store, and process. While losing per-event granularity, they still provide a great level of insight into overall system health. Alerts based on centrally-collected metrics can take into account the history and different levels of aggregation of time series from multiple sources. Thus, they make for a great source of actionable and precise alerts. It's often a good idea to base your main monitoring on metrics for this reason.
+
+Prometheus is one example of a metrics-based monitoring system that allows efficient collection and flexible processing of time series data. Other examples of systems that can store metrics are InfluxDB, OpenTSDB, and Graphite.
+
+Request Tracing
+Request tracing is a special form of event logging that focuses on tracing individual requests across processing stages or service boundaries. For example, in a multi-tier architecture, request tracing might record how much time a given request has spent in the load balancer, in the web application server, and in the database layer. It may also record in which layer the request encountered a failure. Examples of request tracing systems are Zipkin and Jaeger.
+
+ 
+
+
+The trace of an HTTP request as displayed in Jaeger (Screenshot)
+
+ 
+
+To make tracing work, every processing stage or microservice emits an event (called a "span") with details about its own phase of the processing, and stores those events in a central store. That store then correlates events for the same request using a common trace identifier. To avoid the cost problem of event logging, tracing usually only records information for a small sampled subset of all requests.
+
+Request tracing provides deep insight into the overall lifecycle of a request and is especially helpful in determining which processing stages or sub-services can benefit most from optimizations. The main downside is that request tracing only works when all components cooperate in recording trace spans and passing on trace identifiers for a request to the next stage. Otherwise, correlation across service boundaries becomes impossible. Thus, it's often hard to make tracing work in all environments, and due to its specialized nature, it's not a great fit for basing your primary systems and service monitoring on it.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Differentiate between what Prometheus is trying to solve and what it is not.
+Discuss how and why Prometheus was created.
+Explain the basic Prometheus system architecture.
+Describe the major selling points of Prometheus, such as the data model, query language, and more.
+
+What Is Prometheus?
+Prometheus is an integrated monitoring system and time series database that aims to solve a broad spectrum of metrics-based system monitoring needs:
+
+Exposing metrics from processes, machines, and other components (instrumentation)
+Collecting and storing that metrics data
+Querying, alerting, and dashboarding based on the collected data.
+Prometheus is generic enough to monitor all levels of typical IT stacks, from the network and hardware layer all the way up to application-level metrics. Still, it is optimized for operational systems monitoring and is not always suitable for tracking business-level metrics.
+
+Prometheus was especially designed to work well with dynamic cloud environments and container orchestrators like Kubernetes.
+
+
+System Architecture
+The following diagram gives an overview of the overall Prometheus system architecture (retrieved from the Prometheus website):
+
+ 
+
+
+Prometheus system architecture
+
+ 
+
+An organization will typically run one or more Prometheus servers, which form the heart of a Prometheus setup. A Prometheus server is configured to discover a set of metrics sources (so-called "targets") using service-discovery mechanisms such as DNS, Consul, or Kubernetes. Prometheus then periodically pulls (or "scrapes") metrics in a text-based format from these targets over HTTP and stores the collected data in a local time series database. A target can either be an application that exposes Prometheus metrics about itself or an intermediary piece of software (a so-called "exporter") that translates metrics from an existing system (like a MySQL server) into the Prometheus metrics exposition format. The Prometheus server then makes the collected data available for queries, either via its built-in web UI, using dashboarding tools such as Grafana, or by direct use of its HTTP API.
+
+ 
+
+🚩
+Each scrape only transfers the current value of every time series of a target to Prometheus, so the scrape interval determines the final sampling frequency of the stored data. The targets do not retain any historical metrics data themselves.
+ 
+
+The Prometheus server can also generate alerts based on the collected data. However, it does not send notifications to human operators directly. Instead, it forwards generated alerts to the Prometheus Alertmanager. The Alertmanager receives alerts from multiple Prometheus servers in the organization, routes, groups, and aggregates them, and sends out notifications via email, Slack, PagerDuty, or other notification services.
+
+The Selling Points
+Prometheus offers a combination of important features over other monitoring solutions:
+
+A dimensional data model that allows faceted tracking of metrics
+A powerful query language to provide flexible answers
+Integration of time series processing and alerting
+Integration with service discovery to determine monitoring targets
+Operational simplicity
+A highly efficient implementation.
+Although many of these features are becoming more common in monitoring systems these days, Prometheus was the first open source solution to combine them all.
+
+We will discuss each of these points in more detail on the following pages.
+
+Data Model
+Prometheus stores time series. A time series has an identifier and a set of samples that belong to it.
+
+ 
+
+
+Prometheus Data Model
+
+ 
+
+Every series is identified by a metric name and a set of key-value pairs called labels:
+
+The metric name identifies the overall aspect of a system that is being measured (in our example, api_http_requests_total, the total number of API HTTP requests processed so far)
+Labels differentiate sub-dimensions or facets of the metric (like method="POST" vs. method="GET" for tracking GET and POST requests separately). They work similarly to labels in Kubernetes or Docker.
+Samples form the bulk data of a series:
+
+​Timestamps are 64-bit integers in millisecond precision
+Sample values are 64-bit floating point numbers.
+Notably, this data model does not rely on the notion of a hierarchy to model dimensionality, unlike systems such as StatsD or Graphite. Instead, dimensions are differentiated by a set of unordered key-value pairs (labels). This makes the data model flexible to work with, as the meaning of each dimension is explicit via its label name and queries only need to refer to those labels that are currently relevant to that query.
+
+Data Transfer Format
+Services that want to expose Prometheus metrics simply need to expose an HTTP endpoint providing metrics in Prometheus's text-based exposition format. The output of such an endpoint is human-readable and can look like this in its simplest form:
+
+http_requests_total{status="200"} 8556
+http_requests_total{status="404"} 20
+http_requests_total{status="500"} 68
+
+Each line in this format represents a single sample (with metric name and labels) and its value, making it easy to expose metrics from systems and services. We will learn more about this format later in the course.
+
+Query Language Introduction
+To make use of the collected data, Prometheus implements its own query language called PromQL. PromQL is a functional language that is optimized for evaluating flexible and efficient computations on time series data. In contrast to SQL-like languages, PromQL is only used for reading data, not for inserting, updating, or deleting data (this happens outside of the query engine). We will learn more about PromQL later, but will take a look at some examples here.
+
+The following selects the total count of all handled HTTP requests that resulted in a 500 status code:
+
+http_requests_total{status="500"}
+
+The following gives you the per-second rate of increase for each series, as averaged over a window of 5 minutes:
+
+rate(http_requests_total{status="500"}[5m]
+
+And you can calculate the ratio of status="500" errors to the total rate of requests grouped by HTTP path like this
+
+sum by(path) (rate(http_requests_total{status="500"}[5m]))
+/
+sum by(path) (rate(http_requests_total[5m]))
+
+These are some of the most common constructs you will see in PromQL, but the language has many more features and capabilities that we will learn about later in the course.
+
+
+Integrated Alerting and Time Series Processing
+Prometheus integrates collecting and processing of time series data with an active alerting system. Its philosophy is to collect as much data about your systems as possible in a single data model so that you can then formulate integrated queries over it. The same query language that is used for ad-hoc queries and dashboarding is also used to define alerting rules. For example, the following rule would alert you if the number of HTTP requests that resulted in a 500 status code exceeded 5% of the total traffic for a given path:
+
+alert: Many500Errors
+expr: |
+  (
+      sum by(path) (rate(http_requests_total{status="500"}[5m]))
+    /
+      sum by(path) (rate(http_requests_total[5m]))
+  ) * 100 > 5
+for: 5m
+labels:
+  severity: "critical"
+annotations:
+  summary: "Many 500 errors for path {{$labels.path}} ({{$value}}%)"
+
+This is in contrast to a historical split between fault-detection systems like Nagios, which run periodic check scripts and keep little historical data, and standalone time series databases that store metrics, but are otherwise passive.
+
+Service Discovery Integration
+Modern dynamic IT environments create new challenges for monitoring systems:
+
+On-demand VMs on cloud providers are scaled up and down as required
+Service instances are dynamically scheduled onto hosts by container orchestrators such as Kubernetes, Docker Swarm, or Mesos
+The trend towards microservices leads to an ever-growing number of individual services to operate and monitor.
+The question arises: How can a monitoring system still make sense of this dynamic world? How does it know which machines or service instances should currently exist, what their identity is, and how to fetch metrics from them? It is no longer possible for an operator to statically configure this information, as it is both too complex and changing too rapidly.
+
+To solve this problem, Prometheus integrates with common service discovery mechanisms of your infrastructure to discover its monitoring targets. Prometheus supports multiple built-in service discovery mechanisms, for example for:
+
+Discovering VMs on cloud providers (AWS, Azure, Google, ...)
+Discovering service instances on cluster orchestrators (Kubernetes, Marathon, ...)
+Discovering targets using generic lookup methods such as DNS, Consul, Zookeeper, or custom discovery mechanisms.
+Prometheus uses service discovery for three distinct, yet related purposes:
+
+To build a view of what targets should exist (so it can record and alert if one is missing)
+To gain technical information of how to pull metrics from a target via HTTP
+To enrich the series collected from a target with labeled metadata about the target.
+In this way, Prometheus uses service discovery as a source of truth to reliably monitor dynamic environments while minimizing administrative overhead.
+
+
+
+Operational Simplicity
+Prometheus is conceptually simple and easy to operate:
+
+It is written in Go and the static release binaries are deployable without depending on an external runtime (like the JVM), an interpreter (like Python or Ruby), or shared system libraries
+Each Prometheus server gathers data and evaluates alerting rules independently from any other Prometheus server and only stores data locally without tight clustering or replication
+To create a highly available setup for alerting, you can still run two identically configured Prometheus servers computing the same alerts (the Alertmanager will de-duplicate notifications).
+Of course, large scale deployments of Prometheus or setups with special needs can still become complex. Prometheus also provides interfaces for solving some of its limitations externally, like durable long-term storage. But the building blocks are simple
+
+Efficient Implementation
+Prometheus needs to be able to collect detailed dimensional data from many systems and services at once. To this end, especially the following components have been highly optimized:
+
+Scraping and parsing of incoming metrics
+Writing to and reading from the time series database
+Evaluating PromQL expressions based on TSDB data.
+As a rule of thumb, a single large Prometheus server can ingest up to 1 million time series samples per second, and uses 1-2 bytes for the storage of each sample on disk. It can handle several million concurrently active (present in one scrape iteration of all targets) time series at once.
+
+Growth and Community
+Since its initial public announcement in 2015, Prometheus uptake around the world has grown a lot. Countless large and small companies and organizations are now betting their primary systems and service monitoring on Prometheus, and interest in the open-source project on GitHub has risen above 30,000 stars.
+
+ 
+
+
+Number of GitHub stars on the prometheus/prometheus repository. Created on April 22, 2021 using https://seladb.github.io/StarTrack-js/#/
+
+ 
+
+Some examples of companies and organizations using or integrating with Prometheus are:
+
+Google
+DigitalOcean
+Red Hat
+CERN
+Deutsche Bahn
+New York Times.
+You can also find a list of users at the bottom of the Prometheus homepage.
+
+The project members and users communicate and coordinate on public mailing lists, IRC channels, and GitHub issues. See the Prometheus Community page for more details on this.
+
+Prometheus is now a hosted project by the Cloud Native Computing Foundation, and the project has official governance rules that define team memberships and determine how decisions are made.
+
+Prometheus is an open source project and welcomes community contributions. You can find information about contributing on the Prometheus Community page and also in the CONTRIBUTING.md files in each individual repository in the "prometheus" GitHub organization. For example, take a look at the contribution guidelines for the Prometheus server repository itself.
+
+
+Recommended Resources
+In addition to this course, we recommend the following resources on Prometheus:
+
+The official Prometheus documentation includes an introduction to Prometheus and its concepts, reference documentation, user guides, and best practices recommendations
+The Robust Perception blog and the PromLabs blog cover a wide range of Prometheus use cases, implementation details, and gotchas.
+The book Prometheus Up & Running by Brian Brazil explains all major aspects of Prometheus, its ecosystem, and how to employ Prometheus to monitor systems and services
+For getting usage or development help, see the project's Community page with pointers to the mailing lists and IRC channels for users and developers.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Configure and run Prometheus in a basic setup to monitor itself.
+Verify that Prometheus is up and running.
+Use Prometheus's built-in expression browser and graphing interface.
+
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Select series from the TSDB (time series database) using various label matching criteria.
+Calculate rates of increase of counter metrics.
+Derive how gauge values increase or decrease over time.
+Aggregate multiple time series across their dimensions.
+Perform arithmetic between sets of time series.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Discuss different dashboarding options for Prometheus.
+Set up Grafana.
+Build dashboards displaying data from Prometheus using Grafana.
+
+Overview
+Prometheus's built-in graphing mode and expression browser are useful for ad-hoc debugging, but not a good solution for more complex graph options or persisted and shared dashboards. In this chapter, you will learn how to create dashboards based on Prometheus data.
+
+You can create dashboards from Prometheus data in multiple ways:
+
+Grafana is a popular and feature-rich web-based dashboard builder that has native support for querying Prometheus servers. This is the most popular option and recommended for most dashboarding use cases
+Console templates are a way to serve arbitrary HTML templates directly from a Prometheus server. Data in the Prometheus server can be used to generate these pages dynamically. Console templates are only recommended for advanced use cases
+Using the HTTP query API, it is possible to build completely customized visualizations and user interfaces based on Prometheus data.
+Here you will focus on building a dashboard using Grafana.
+
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Install and monitor the Node Exporter.
+Query and interpret various host-based system metrics.
+
+Node Exporter
+Prometheus provides an exporter called the Node Exporter, which exposes metrics about the Linux or Unix host it is running on. For example, it outputs metrics about the memory usage, CPU usage, disk usage, and network traffic of a host. It fetches most of its system information from the /proc and /sys virtual filesystems, but also executes system calls to retrieve statistics (the details vary by operating system).
+
+In this chapter, you will install and monitor the Node Exporter, and then learn how to interpret and make use of the metrics it exposes.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Monitor container-level metrics with cAdvisor.
+Explain the underlying source from which cAdvisor generates metrics.
+Query for the resource usage and other characteristics of each container.
+
+Container Metrics
+After monitoring a host machine's system metrics using the Node Exporter, the next common use case is to monitor the resource usage (CPU, memory, network IO, etc.), as well as other externally observable metrics about each container running on a machine. While this does not give you true white-box monitoring yet (monitoring what happens inside an application), you can now already learn more about the behavior of your actual application container instances and not just the host machine itself. With this, you can spot troublesome containers that are using an unexpected amount of resources or are in a bad state. It also allows you to generate aggregated reports that inform you about the total resource usage per type of container. For example, you could compute the total memory usage of a type of service across your fleet.
+
+cAdvisor
+cAdvisor from Google is an exporter that exposes those metrics about every container running on a system. Docker and other containerization technologies use the Linux kernel's cgroups (or control groups) technology under the hood to implement resource limits for containers. cAdvisor reads information about every cgroup from the host's virtual cgroups filesystem and translates this information into the Prometheus metrics format.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain the different functionalities that Prometheus client libraries provide.
+Discuss the metric types that Prometheus supports and when to use which type.
+Instrument your own code using the Prometheus client libraries.
+Follow best practices of labeling, naming, and structuring metrics when instrumenting code.
+
+Overview
+When you are writing your own applications, the best way to get good metrics is to add direct Prometheus instrumentation to your code. This is superior to using intermediary exporters because it allows for a true white-box monitoring of your application: monitoring that understands what is happening inside your application, not just how it behaves as observed from the outside.
+
+In this chapter, you are going to learn about instrumentation and add Prometheus metrics to the code of an example service.
+
+Client Libraries
+Prometheus offers client libraries for a number of languages. These libraries fulfill two functions:
+
+Track metrics about what is happening in your application
+Expose the tracked metrics to Prometheus over HTTP.
+You will work with both of these functionalities later.
+
+
+
+Exposition Format
+Prometheus client libraries also help us expose the tracked metrics in a simple text-based format that the Prometheus server can scrape. This format looks like this:
+
+# HELP http_requests_total The total number of HTTP requests.
+# TYPE http_requests_total counter
+http_requests_total{method="post",code="200"} 1027
+http_requests_total{method="post",code="400"} 3
+# HELP http_request_duration_seconds A histogram of the request duration.
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{le="0.05"} 24054
+http_request_duration_seconds_bucket{le="0.1"} 33444
+http_request_duration_seconds_bucket{le="0.2"} 100392
+http_request_duration_seconds_bucket{le="0.5"} 129389
+http_request_duration_seconds_bucket{le="1"} 133988
+http_request_duration_seconds_bucket{le="+Inf"} 144320
+http_request_duration_seconds_sum 53423
+http_request_duration_seconds_count 144320
+# HELP rpc_duration_seconds A summary of the RPC duration in seconds.
+# TYPE rpc_duration_seconds summary
+rpc_duration_seconds{quantile="0.01"} 3102
+rpc_duration_seconds{quantile="0.05"} 3272
+rpc_duration_seconds{quantile="0.5"} 4773
+rpc_duration_seconds{quantile="0.9"} 9001
+rpc_duration_seconds{quantile="0.99"} 76656
+rpc_duration_seconds_sum 1.7560473e+07
+rpc_duration_seconds_count 2693
+
+As you can see, samples are sent line by line with their metric name, labels, and sample value. Histogram and Summary metrics are represented as multiple time series. The format can also include a client-side sample timestamp after the sample value, although this is uncommon. Normally, the Prometheus server's scrape timestamp is used.
+
+When you navigate to the /metrics endpoint of an instrumented service (like Prometheus itself) in a browser, you can inspect these metrics manually.
+
+For more details, see the exposition formats documentation. This format is also being evolved with minor modifications into an open standard called OpenMetrics, which the Prometheus server can already scrape as well.
+Instrumentation Best Practices and Pitfalls
+When adding metrics to your own code, there are a number of recommended best practices to follow. These are documented in Prometheus's best practices documentation for metric and label naming as well as for instrumentation.
+
+This is a summary of the most important points:
+
+Include a unit suffix in the metric name
+Use base units (e.g. use seconds vs. milliseconds, bytes vs megabytes
+Add a _total suffix to counters, no suffix for gauges
+Avoid labels with an unbounded number of values (like user IP addresses). Every label value creates a new time series that needs to be tracked
+If the dimensions of a multi-dimensional metric are easy to enumerate at startup, initialize each of them explicitly (for example, initialize all counter dimensions to 0). This avoids missing series, which can be troublesome to work with
+Expose counters for errors and total requests rather than counters for errors and successful requests. It's easier for ratio calculations like failed / total than failed / (succeeded + failed)
+As a rule of thumb, either the sum() or the avg() over all series of a metric name should be meaningful (the dimensions should partition the metrics space). Otherwise, split dimensions into separate metric names.
+Try to keep these best practices in mind when instrumenting the example code in the next section.
+
+Minimal Instrumentation Example
+The following is a minimal instrumentation example in Go that exposes a single gauge metric with the value 42 on port 8080. Since it is using the global default metrics registry, the output on /metrics also includes additional Go runtime metrics and process-related metrics out of the box.
+
+package main
+
+import (
+      "log"
+      "net/http"
+           
+      "github.com/prometheus/client_golang/prometheus"
+      "github.com/prometheus/client_golang/prometheus/promhttp"
+)
+func main() {
+      // Create a test gauge with name and help string.
+      testGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+      Name: "test_gauge",
+      Help: "Test gauge. Its value is always 42.",
+      })
+      // Register the gauge in the global metrics registry.
+      prometheus.MustRegister(testGauge)
+      // Set the gauge to 42.
+      testGauge.Set(42)
+      // Expose all metrics in the default registry on /metrics.
+      http.Handle("/metrics", promhttp.Handler())
+      // Listen for HTTP requests on port 8080.
+      log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain how Prometheus exporters work and when they are needed.
+Follow best practices when designing exporters.
+Build custom exporters in Python.
+
+Overview
+While adding direct instrumentation to the codebase of an application gives you the best-possible insight, this is sometimes not possible: you may be running closed-source software (like an Oracle database server), open-source software where you do not control the development lifecycle (like a MySQL server), or you may be stuck with a hardware device that cannot be scraped directly by Prometheus. For these cases, Prometheus has the concept of an "exporter" that helps fetch and translate metrics from third-party systems. This works as long as the third-party system has some other way of retrieving metrics from it. You have already used several examples of exporters earlier on in this course (like the Node Exporter and cAdvisor).
+
+In this chapter, you are going to learn more about how exporters work and how to create your own.
+
+
+
+Exporter Architecture
+An exporter is a process that sits between Prometheus and a third-party component you want to monitor that does not have direct support for Prometheus metrics. Instead of scraping the third-party component directly, you configure Prometheus to scrape the exporter. During the scrape, the exporter synchronously gathers metrics from the backend system and translates them into Prometheus metrics on the fly. For example, in the case of the Node Exporter, the exporter gathers statistics from the host's /proc and /sys filesystems (among other sources) and translates those statistics into Prometheus metrics.
+
+Sometimes, an exporter might have to perform expensive actions to gather metrics. Only in those cases, it may make sense to not calculate the necessary metrics at scrape time, but asynchronously.
+
+To benefit from Prometheus's fine-granular pull model, its service discovery, and the labeled metadata that it attaches to every scrape target, avoid "super" exporters that monitor multiple processes or services at once. Instead, a good rule of thumb is to run one exporter process (i.e. one pull target) for every monitored third-party process.
+
+When you cannot instrument a software component directly and there is also no existing exporter for it, you may want to write your own exporter. In the best case, writing an exporter is simple, since it only requires translating existing metrics into the Prometheus metrics format. Doing a clean translation does require some understanding of the metrics in question though.
+
+ 
+
+
+Exporter Architecture
+
+Metrics Translation Best Practices
+When building an exporter, much of the usual Prometheus client library functionality becomes unnecessary. Since you are only proxying (and translating) existing third-party metrics, you do not need to keep track of the state of each metric in the exporter itself. Thus, you do not need the normal Counter, Gauge, Histogram, and Summary metric APIs with methods to increment, set, or observe values. Instead, it is better to create "throw-away" metrics during each scrape that are set to the current value upon creation and are forgotten after the scrape. The client libraries have so-called "const metric" (constant metric) types for this.
+
+When translating metrics from an existing system, you have to make a trade-off between trying to convert them into cleanly structured Prometheus metrics and the potential amount of work that would entail. Sometimes, especially when you are dealing with a source system with many metrics that can vary over time, you may choose to omit explicitly defined translation rules for every metric and auto-generate the output metrics using a common mapping scheme. Still, try to follow the Prometheus metrics naming and labeling best practices as much as possible.
+
+For more information, see the guide on writing exporters.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Interpret histogram metrics and calculate quantiles from them.
+Filter series by sample value.
+Perform set operations.
+Work with timestamp metrics.
+Query data at offsets.
+Sort and limit query results.
+Formulate queries around scrape health.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain the motivation for relabeling.
+Discuss how relabeling fits in with the rest of the Prometheus configuration.
+Apply relabeling steps to manipulate targets, samples, and alerts based on their label sets.
+
+
+Motivation
+Prometheus discovers, scrapes, and processes different types of labeled objects. The most obvious ones are scrape targets and time series samples, but alerts have labels as well. Often it is useful to manipulate or filter these objects based on their label values. Relabeling is a concept in Prometheus that allows you to do that.
+
+These are just some example cases that relabeling enables:
+
+Only monitor targets that have a specific service discovery annotation that indicates that they should be scraped.
+Add an HTTP query parameter to the scrape request for a target.
+Only store a filtered subset of the samples scraped from a given target.
+Remove a replica label from alerts sent to the Alertmanager (so that identical alerts sent from a high availability Prometheus can be deduplicated in the Alertmanager).
+Combine two label values of a scraped series into a single label (or vice versa).
+
+Relabeling Overview
+Relabeling is implemented as a series of transformation steps that you can apply in different sections of the Prometheus configuration file to filter or modify a list of labeled objects. You can apply relabeling to the following labeled objects:
+
+Discovered scrape targets (relabel_configs section in a scrape_config section).
+Individual samples from scrape targets (metric_relabel_configs section in a scrape_config section).
+Alerts sent to the Alertmanager (alert_relabel_configs in the alerting section).
+Samples written to remote storage systems (write_relabel_configs in the remote_write section).
+All of these different relabeling configuration sections are of the same type relabel_config, which is documented in detail in the Prometheus configuration documentation.
+
+Relabeling consists of a list of rules that are applied one after another to each labeled object. For example, a relabeling rule may keep or drop an object based on a regular expression match, may modify its labels, or may map a whole set of labels to another set. Once a relabeling step decides to drop a labeled object, no further relabeling steps are executed for this object and it is deleted from the output list.
+
+
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Discuss how service integration helps Prometheus monitor dynamic environments.
+Discover targets using Consul.
+Build your own service discovery integration based on a file-based mechanism.
+
+Motivation
+So far, you have configured scrape targets statically using a static_configs section in your prometheus.yml configuration file. In dynamic cloud environments, this pattern no longer works, as scrape targets appear and disappear frequently without manual provisioning. This is especially true when using a cluster scheduler like Kubernetes. To address this, Prometheus integrates support for different service discovery mechanisms. In this chapter, you will learn how service discovery works in Prometheus and explore two example integrations based on Consul and a file-based custom discovery mechanism.
+
+Service Discovery Support
+Prometheus has built-in support for discovering services and nodes on a variety of platforms:
+
+Cloud and VM providers (e.g. AWS EC2, Google GCE, Microsoft Azure)
+Cluster schedulers (e.g. Kubernetes, Marathon)
+Generic mechanisms (e.g. DNS, Consul, Zookeeper)
+File-based custom service discovery.
+Each of these can be added to a scrape_config section to provide a dynamic list of targets that continuously updates during Prometheus’s run time. Prometheus will automatically stop scraping old instances and start scraping new ones, so that even highly dynamic environments such as Kubernetes are well-supported.
+
+File-Based Discovery
+Your infrastructure may have a way of discovering services that Prometheus does not yet support natively. In those cases, Prometheus allows you to build your own custom discovery integration by watching a set of local files for information on targets and their labels. The target file contents have to be provided by your custom code that knows how to talk to your infrastructure.
+
+In Lab 13.2, you will use the file-based service discovery mechanism to feed a changing list of custom targets to Prometheus during runtime. For full details, see the documentation of the file_sd discovery mechanism.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain how Prometheus and the Blackbox Exporter play together.
+Set up and configure the Blackbox Exporter.
+Use the Blackbox Exporter to probe systems and services from the user's perspective.
+
+Blackbox Monitoring Overview
+Blackbox monitoring means monitoring a system's or service’s health from the outside. While it is recommended to monitor and alert on whitebox metrics coming from the inside of your services, blackbox monitoring can be a useful addition to verify that a service really behaves the way you expect from the user's point of view. For example, in addition to a service's own metrics about its availability and request latencies, you may want to send regular probe requests to the service from the outside and ensure that they succeed and are processed in a timely fashion. You may also want to verify that the response contains certain information.
+
+Blackbox Exporter
+The Blackbox Exporter is a Prometheus component that allows probing a remote service in various ways:
+
+HTTP(S) probes
+DNS probes
+TCP probes
+ICMP probes.
+For each of these probe types, the exporter exposes metrics that tell you whether the probe succeeded, how long it took to complete, and other probe-specific metrics.
+
+The Blackbox Exporter is special in the way how it is told which targets to probe. Instead of replicating service discovery logic in the Blackbox Exporter, it takes advantage of the Prometheus server's existing service discovery support. Prometheus discovers targets to scrape and then scrapes the Blackbox Exporter once for each service target to probe, passing the service endpoint as a target HTTP parameter to the Blackbox Exporter during the scrape itself:
+
+ 
+
+
+Blackbox Exporter
+
+ 
+
+This requires a three-step relabeling process in Prometheus:
+
+Move the address of the discovered target into a __param_target label (which places the target to probe into a target HTTP query parameter during the scrape)
+Explicitly set the instance label to the value of that target query parameter as well
+Set the address that Prometheus should scrape (__address__ label) to the address of the Blackbox Exporter instead of the service target.
+You will see an example of this in the following lab, where you will probe web endpoints over HTTP using the Blackbox Exporter.
+
+
+16. ALERTING
+
+Introduction
+
+Alerting
+
+Lab Exercises
+
+Knowledge Check
+17. MAKING PROMETHEUS HIGHLY AVAILABLE
+
+Introduction
+
+Making Prometheus Highly Available
+
+Knowledge Check
+18. RECORDING RULES
+
+Introduction
+
+Recording Rules
+
+Lab Exercises
+
+Knowledge Check
+19. SCALING PROMETHEUS DEPLOYMENTS
+
+Introduction
+
+Scaling Prometheus Deployments
+
+Lab Exercises
+
+Knowledge Check
+20. PROMETHEUS AND KUBERNETES
+
+Introduction
+
+Prometheus and Kubernetes
+
+Lab Exercises
+
+Knowledge Check
+21. LOCAL STORAGE
+
+Introduction
+
+Local Storage
+
+Knowledge Check
+22. REMOTE STORAGE INTEGRATIONS
+
+Introduction
+
+Remote Storage Integrations
+
+Lab Exercises
+
+Knowledge Check
+23. TRANSITIONING FROM & INTEGRATING WITH OTHER MONITORING SYSTEMS
+
+Introduction
+
+Transitioning From & Integrating with Other Monitoring Systems
+
+Knowledge Check
+24. MONITORING AND DEBUGGING PROMETHEUS
+
+Introduction
+
+Monitoring and Debugging Prometheus
+
+Lab Exercises
+
+Knowledge Check
+25. COURSE COMPLETION
+
+Feedback
+
+Course Completion
+
+ RESOURCES
+ NOTES
+PUSHING DATAIntroduction
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain why Prometheus favors a pull model.
+Discuss the situations in which the pull model breaks down.
+Explain what the Pushgateway is and which use cases it solves.
+Deploy the Pushgateway.
+Monitor service-level batch jobs using the Pushgateway.
+
+Challenges with Pulling Data
+Prometheus is a pull-based monitoring system that expects to be able to scrape metrics from other processes over HTTP. Other Prometheus features also assume that the server is in control of collecting metrics and assigning timestamps to incoming samples at its own pace. For example, recording and alerting rules are evaluated based on the server's notion of the current time. Thus, the underlying metrics must arrive in lockstep with rule evaluations, and a pull model is the best way to ensure this. Service discovery and automatic target health monitoring (via the synthetic up metric) are other features that rely on the pull model. It's not advisable to try and convert Prometheus into a general push-based system.
+
+However, pulling metrics is sometimes impossible or impractical. For example, batch jobs might run too briefly to be scraped, or a network firewall might hinder Prometheus from establishing connections to targets. Some of these use cases fall outside of the scope of Prometheus, while others can be solved using an intermediary component called the Pushgateway.
+
+Pushgateway Overview
+The Pushgateway is a core Prometheus component that runs as a separate server and allows other jobs to push groups of metrics to it over HTTP using Prometheus's text-based metrics exposition format. The Pushgateway caches the last received sample value for each metric and exposes all pushed metrics to Prometheus for regular scraping.
+
+ 
+
+
+Pushgateway architecture
+
+ 
+
+Note that the Pushgateway does not act as an aggregator or event counter. It only remembers the last value of each metric that was pushed to it. Prometheus will then periodically scrape that last value with an ongoing timestamp as assigned by the pulling server. Multiple jobs can push metrics to the Pushgateway without interfering with each other by defining grouping labels (typically the job label) for the metrics they send. Thus, each job will only overwrite its own metrics group on every push, while all other jobs' groups will remain untouched. A pushing job can also choose whether it wants to replace an entire group of metrics or only update metrics that are included in the latest push to that group (PUT vs POST HTTP methods).
+
+You can find more details about the Pushgateway's HTTP API in the Pushgateway documentation.
+
+The Pushgateway should mainly be used for monitoring service-level batch jobs; that is, jobs that run too briefly to be scraped, and where you do not care about tracking (in a label value) the specific machine or process that executed the batch job. An example of a service-level batch job is one that runs once per hour and deletes a number of stale users for an entire service. Do not try to use the Pushgateway to turn Prometheus into a general push-based system for process or machine-level monitoring.
+ 
+
+There are multiple reasons for this:
+
+The Pushgateway never forgets metrics. Thus, if you group metrics by process (e.g. using an instance label) or machine and you later turn down the source process or machine, you will need to manually delete the corresponding metrics groups in the Pushgateway or they will be scraped forever.
+The Pushgateway becomes a single point of failure for all pushed metrics.
+You lose the benefits of service discovery support and automatic health monitoring of the original targets.
+You can find more details and workarounds for other use cases in Prometheus's best practices documentation around pushing metrics.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Highlight general best practices around alerting.
+Explain Prometheus's alerting architecture.
+Deploy Alertmanager with Prometheus.
+Configure alerting rules in Prometheus.
+Make Alertmanager setups highly available.
+
+Alerting Best Practices
+As explained in the course introduction, one of the purposes of a monitoring system is to alert operators when monitored systems or services do not behave as expected. In this chapter, you will learn about alerting best practices and how alerting works in the Prometheus ecosystem.
+
+Setting up good alerting for systems and services can be challenging. It is easy to create alerts that are either not meaningful, not urgent, not actionable, or not precise.
+
+Rob Ewaschuk’s My Philosophy on Alerting covers best practices for good alerting in the general case (not Prometheus-specific).
+
+Below is a summary of the most important recommendations:
+
+Alert on user-visible service-level symptoms (such as availability, latency, and error rates of a web service) rather than all possible underlying causes (such as high load or CPU)
+Alert on imminent dangers to your service (such as a disk running full in several hours)
+Alert in a way that is actionable (there is something that can be done to remedy the problem)
+Still collect cause-based metrics as supplementary information to help you debug incidents
+Err on the side of removing noisy alerts to reduce on-call fatigue.
+The Prometheus documentation offers further alerting best practices that are worth taking a look at.
+
+Alerting Architecture Overview
+In the Prometheus ecosystem, alerting responsibilities are split up between the Prometheus server and the Alertmanager. Typically, one would run multiple Prometheus servers in an organization that all send alerts to the same Alertmanager (or Alertmanager cluster).
+
+ 
+
+
+Prometheus Alerting Architecture
+
+ 
+
+The two components take the following roles in this architecture:
+
+Prometheus:
+
+Periodically evaluates a set of configured alerting rules based on PromQL
+Continuously sends any firing alerts to a configured Alertmanager (cluster).
+Alertmanager:
+
+Acts as a central clearing house for alerts from multiple Prometheus servers
+Has logic for routing alerts based on their label sets, manually silencing alerts, and configuring alert dependencies
+Sends out actual notifications to systems such as PagerDuty, Slack, Email, and so on.
+In labs 16.1-16.4, you will deploy Alertmanager and configure Prometheus to send alerts to it.
+
+xRoutes
+Routes are the heart of the Alertmanager configuration and determine how alerts are grouped into notifications, and what kind of notification should finally be sent out for them (email, PagerDuty, Slack, etc.).
+
+Routes can be hierarchical. For example, a top-level route might match all the alerts of one service by their service label and set some defaults for all the alerts in that routing group. However, you could then define a sub-route within that route that matches only a subset of the alerts for that service and decides to route them differently by overriding some of the settings of the parent route. This allows you to build detailed routing trees.
+
+Study the following excerpt of an Alertmanager’s routes configuration:
+
+# Root route.
+route:
+ group_by: ['alertname', 'cluster', 'service']
+ group_wait: 30s
+ group_interval: 5m
+ repeat_interval: 3h
+ # Send everything to team-X-emails by default.
+ receiver: team-X-mails
+ # Child routes.
+ routes:
+ # Send alerts for some services to team Y, critical ones to their pager.
+ - match_re:
+     service: ^(foo1|foo2|baz)$
+   receiver: team-Y-mails
+   routes:
+   - match:
+       severity: critical
+     receiver: team-Y-pager
+ # This route handles all alerts coming from a database service. If there's
+ # no team to handle it, it defaults to the DB team.
+ - match:
+     service: database
+   receiver: team-DB-pager
+   # Also group alerts by affected database.
+   group_by: [alertname, cluster, database]
+   routes:
+   - match:
+       owner: team-X
+     receiver: team-X-pager
+   - match:
+       owner: team-Y
+     receiver: team-Y-pager
+
+In this configuration file, all alerts are grouped by their alertname, cluster, and service labels by default and sent to team X's email receiver. For the services foo1, foo2, and baz, alerts are sent to team Y's email instead, unless they also have a critical severity, in which case they will be sent to team Y's pager. Alerts for the database service are grouped differently (by database rather than by service), and the alert's owner label is used to route alerts to the right team's pager.
+
+Close Silences
+Silences allow you to pause notifications for a given set of alerts for a specified period of time. Silences are usually created through the web UI and allow matching alerts based on a set of label equality or regular expression matchers. Silences are useful if you have an ongoing outage and don’t want to receive further notifications about a set of related alerts, or when you are preparing a maintenance operation on some piece of infrastructure.​ Silences are persisted in the Alertmanager’s on-disk database and replicated between highly available Alertmanager cluster instances.
+
+Close Inhibition Rules
+Inhibition rules allow modeling of service dependencies. For example, if the main database for a service is down, you may only want to send notifications about the database being down, and not about all the service components now failing because they cannot reach the database. Inhibition rules allow you to define a set of target alerts for which notifications should be suppressed when a set of source alerts is active.
+
+Close Notification Types
+Alertmanager supports several different built-in notification types. It can send notifications to Slack, Email, PagerDuty, OpsGenie, and other notification services. In case Alertmanager does not support the notification type that you need, you can build your own by using Alertmanager’s generic webhook notifier.
+Close Notification Templating
+Alertmanager allows you to customize the style and content of the actual alert notifications that get sent out. See the notification template examples for some inspiration.
+
+
+Highly Available Alertmanager
+To make alerting reliable, it is not sufficient to have a highly available Prometheus setup (which you will learn about later). The Alertmanager itself also needs to be made fault-tolerant. Next, you will learn how the Alertmanager achieves this and set up a highly available Alertmanager configuration.
+
+When making Alertmanager highly available, you cannot just run multiple instances that have no knowledge of each other. The problem is that you only want to receive each notification only once, instead of from each Alertmanager instance. You would also not want to create a highly consistent cluster using consensus algorithms such as Paxos or Raft, as those setups would fail to accept new writes in a failure case (meaning, alerts cannot be processed anymore). Instead, Alertmanager aims for availability over consistency.
+
+Alertmanager’s clustered HA mode works like this:
+
+Prometheus sends alerts to all instances of an Alertmanager cluster
+The Alertmanager instances gossip the notification state of each alert group among each other
+The Alertmanager instances establish an ordering among themselves and wait progressively longer before sending out notifications along that order.
+This means that in the healthy case, only the first Alertmanager instance will send out notifications, as the others will learn via gossip about the already-sent notifications from the first instance before their wait time runs out.
+
+Only in the degraded case, when there is a network partition between Alertmanager instances, multiple instances will send out the same notification. That is still preferred over not receiving any notification at all. Thus, Alertmanager optimizes for at-least-once-delivery.
+
+ 
+
+
+Alertmanager HA Architecture
+
+High Availability Overview
+Prometheus’s local storage and lack of clustering features mean that the durability and availability of a single Prometheus server are limited. However, you typically want the critical alerting features of your monitoring system to be highly available, so that you can always learn about problems in your other systems and services. The Prometheus approach to solving this is to run two (or more) identically configured Prometheus servers that scrape the same data and evaluate the same alerting rules. Both servers will send identical alerts to the Alertmanager, but the Alertmanager will know how to deduplicate them based on their label sets (to prevent multiple notifications). Neither server has knowledge of the other server in the pair, which keeps the architecture simple and avoids tight clustering dependencies.
+
+ 
+
+🚩
+This model prioritizes the reliability of detecting faults and sending alert notifications, but it is not a full data durability solution. The two identical Prometheus servers are not clustered and have no knowledge of each other. Thus, if you lose one server and reprovision it, it will not re-replicate data from the other server. This means that there can be occasional gaps in your monitoring data, even in highly-available alerting setups. The Prometheus community accepts this and does not try to solve this by itself, since the absolute priority of the project is to reliably deliver alerts.
+ 
+
+
+
+Querying Highly Available Servers
+When you want to query and graph data from a highly available Prometheus server setup in a dashboard like Grafana, the question comes up which of the two server instances to query.
+
+ 
+
+There are multiple options here, with different advantages and drawbacks. Click to learn more about them.
+
+Querying Options
+Close Always query only one server of the pair
+This will always show exactly the same data in graphs. However, Prometheus server failures require a manual failover to the other server and all query load is carried by a single server.
+
+Close Load-balance between the servers
+This spreads the query load over both servers, but graph results will look slightly different on every refresh, since the two servers scrape data at different phases of the common scrape interval. A load balancer that runs periodic health checks can ensure that queries always go to a healthy server.
+
+Close Load-balance with default and fallback backends
+You can configure a load-balancer to always query only the first server in a pair by default, but query the second one in case the first one becomes unhealthy. This leads to highly available querying while still giving you consistent graph results most of the time.
+
+Which of these approaches is the right one for you will depend on your needs and preferences.
+
+
+Avoid Alert Duplication
+When you configure two identical Prometheus servers to send alerts to the same Alertmanager (or Alertmanager cluster), equivalent alerts generated by the two servers will have identical label sets. This allows the Alertmanager to deduplicate these alerts and only send out single notifications for each alert. However, you may run into a problem when you distinguish both Prometheus servers using an external label to identify the replica within the highly-available pair. In the Prometheus configuration file, this could look like this:
+
+global:
+ external_labels:
+   replica: A # (or "B" for the second replica)
+
+Prometheus attaches the configured external labels to any outgoing alerts or samples when talking to external systems (via federation, remote storage integrations, or alerting). This serves to identify the Prometheus server that the data came from. However, you will usually want to remove this extra replica label when sending alerts to the Alertmanager, so that the Alertmanager can still deduplicate alerts as expected. You can do this by adding a labeldrop relabeling rule to the alerting section in the Prometheus configuration file:
+
+alerting:
+ # (...other alerting settings...)
+ alert_relabel_configs:
+   action: labeldrop
+   regex: replica
+
+This ensures that alerts sent from the two Prometheus servers in a pair will look identical to the Alertmanager.
+
+
+Recording Rules and When to Use Them
+Recording rules allow evaluating a PromQL expression at regular intervals and recording the results into a new metric name. They are configured in a Prometheus server in the same way as alerting rules. In this chapter, you are going to learn when to use recording rules and how to set them up.
+
+Recording rules are useful for three use cases:
+
+Pre-recording expensive queries makes querying their results more efficient than computing the original expensive query every time.
+A recording rule stores its results as a new metric name, which can act as a convenient short-hand form for a long PromQL expression.
+In federated setups, recording rules allow a lower-level Prometheus server to save aggregated data under a new metric name that a higher-level Prometheus can then pull using federation (instead of pulling all underlying series of the original query).
+The query efficiency gain is probably the more important aspect. However, only some queries can benefit from this substantially. The main condition is that it must be significantly cheaper to query the recorded result than to execute the original query. This is the case in a couple of cases:
+
+When a query aggregates many series into a few output series (the ratio is what matters here).
+When filtering or joining a set of series with another set series in such a way that the number of loaded series is much larger than the number of output series.
+When calculating rates or other range functions over very long time windows.
+A good approach is to add recording rules as they become necessary. For example, if a given graph in a dashboard is regularly very slow, you might try to pre-record its expressions to improve its performance.
+
+Prometheus defines best practices for naming the resulting metrics of a recording rule. For details on that, see the Prometheus documentation.
+
+Chapter 19 Introduction
+By the end of this chapter, you should be able to:
+
+Highlight the scaling limitations of a single Prometheus server.
+Discuss different available scaling strategies and when to use each.
+Set up scalable Prometheus deployments using hierarchical federation.
+
+Scaling Overview
+While a single Prometheus server is very efficient at ingesting and storing data, it is possible to reach the limits of even a large server when pulling in and processing too much data. At some point, either your disk will run full, the TSDB will not be able to store data fast enough anymore, your server will be overwhelmed with queries, or you will run into some other bottleneck. Eventually, you will need to scale your Prometheus setup in other ways.
+
+This chapter will only give a brief overview over the three main scaling strategies: functional sharding, hierarchical federation, and horizontal mod-sharding. To learn more about scaling strategies, see the RobustPerception blog post about scaling Prometheus.
+
+Functional Sharding
+Functional sharding simply means deploying different Prometheus servers for different services, teams, functions, and so on. How exactly you split up your Prometheus servers will depend on the nature of your organization, its services, and your scaling needs. Splitting up Prometheus servers by function is a good idea beyond scalability reasons, because it enables teams to run their own monitoring and be responsible for it.
+
+ 
+
+
+Functional Sharding Architecture
+
+Hierarchical Federation
+In a hierarchical federation, you deploy different Prometheus servers for different clusters, regions, or similar natural sharding boundaries of a single service, then use federation to pull in aggregate metrics into a global (or higher-level) Prometheus server.
+
+In this fashion, you can build arbitrarily deep federation trees where higher levels of the tree have a more global, but also less detailed view of the world. For example, you may have global, regional, and datacenter federation levels for a large service.
+
+You will set up an example of hierarchical federation later in this chapter.
+
+
+Horizontal Mod-Sharding
+In extreme cases, a single service in a single location can become too large to scrape using a single Prometheus server. In those cases, you can configure a set of otherwise identical Prometheus servers to each only scrape a subset of their configured targets, based on the hash over some of the targets’ labels.
+
+ 
+
+
+Mod Sharding Architecture
+
+ 
+
+You can achieve this by using the hashmod relabeling action to write the hash of a set of target labels into a temporary label, setting the modulus value in the relabeling rule to the number of shards, and then adding a second relabeling step that only keeps targets where the modulus of the hash matches the ordinal number (starting from 0) of the respective shard. For example, a scrape configuration for the first out of 10 shards could look like this:
+
+relabel_configs:
+  - action: hashmod
+    source_labels: [__address__]
+    modulus: 10
+    target_label: __tmp_hash
+  - action: keep
+    source_labels: [__tmp_hash]
+    regex: 0 # Only keep targets for the first shard (index 0).
+
+ 
+
+🚩
+Horizontal sharding splits up service data across multiple Prometheus servers on non-natural boundaries. This makes it harder to find the right Prometheus server to query for a particular subset of targets. To still get a global view of the entire monitored service, you may want to combine this with a higher-level Prometheus server that uses federation to pull only aggregated metrics from the horizontally sharded Prometheus servers.
+
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain why Prometheus and Kubernetes fit well together.
+Deploy and configure Prometheus to run on top of Kubernetes.
+Monitor cluster-, container-, and service-level metrics on a Kubernetes cluster.
+
+Relationship between Prometheus and Kubernetes
+Prometheus is well suited for monitoring services in dynamic environments such as cluster schedulers. In fact, Prometheus was created specifically for this use case. Prometheus works especially well together with Kubernetes. This is no accident because both have a common heritage:
+
+Kubernetes was inspired by Google's Borg cluster scheduler
+Prometheus was inspired by Google's Borgmon (Google’s system for monitoring services on Borg).
+Both have direct support for each other:
+
+Kubernetes cluster components (API Server, Kubelet, Etcd, DNS server) expose native Prometheus metrics endpoints
+Prometheus implements native Kubernetes-based service discovery, meaning that it can discover pods, endpoints, services, and so on, in Kubernetes clusters.
+In this chapter you will run Prometheus on a Kubernetes cluster to monitor the health of Kubernetes cluster components and a service running on it. The chapter assumes that you are already familiar with using Kubernetes in general.
+
+Ne
+
+Operational Concerns
+There are a number of operational concerns to watch out for when running Prometheus on Kubernetes.
+
+Click to learn more about some of these operational concerns.
+
+Operational Concerns
+Close Persistence
+If you want Prometheus to keep its database between deployments, you will need to explore Kubernetes’s persistence options. For example, you may want to use a persistent volume claim (PVC) to always mount in the same data volume into the Prometheus pod across restarts.
+
+Close Running Inside vs. Outside the Cluster
+When Prometheus runs inside the Kubernetes cluster, it automatically gets the right credentials mounted into its container to monitor services on Kubernetes:
+
+A service account token allows Prometheus to discover cluster objects as scrape targets from the Kubernetes API Server
+A certificate authority (CA) file allows Prometheus to scrape metrics from secured targets like the Kubelet.
+Prometheus can also reach the service targets directly, without extra networking precautions, since its pod is part of the cluster's overlay network.
+
+When running outside of the cluster, you will need to provide Prometheus with the right credentials manually and also ensure that Prometheus can reach the metrics endpoints of services running on the Kubernetes cluster.
+
+Close Role-Based Access Controls (RBAC)
+Since Kubernetes 1.7, access to the Kubernetes API Server and other components is by default heavily restricted via Kubernetes’ Role-Based Access Controls (RBAC). Prometheus needs to be run as a service account with broad read permissions to cluster resources to perform service discovery. See this example RBAC configuration.
+
+Close Prometheus Operator
+As you have seen, manual operation of Prometheus and Alertmanager on Kubernetes can become complicated: you need to take care of granting sufficient permissions, mounting in persistent volumes, and performing deployments carefully.
+
+Prometheus Operator is a tool by CoreOS (now part of Red Hat) that aims to automate many of these processes using Kubernetes Custom Resource Definitions. Besides managing Prometheus servers for you, it also supports managing highly available Alertmanager clusters on top of Kubernetes. You may consider using it for operating Prometheus and Alertmanager on Kubernetes.
+
+Close Horizontal Pod Autoscaler Integration
+You can use Kubernetes’s Horizontal Pod Autoscaler (HPA) together with Prometheus to scale your service’s number of pod replicas based on any custom metric exposed by your application. For this, use the k8s-prometheus-adapter together with Kubernetes’s custom metrics API.
+
+
+Chapter 21 Introduction
+Prometheus implements a set of interfaces that allow you to send samples to remote systems and also to read them back using PromQL. This can help overcome some of the durability and scalability limits of an individual Prometheus server. In this chapter, you will learn how these remote storage integrations work and configure your Prometheus server to replicate samples into Cortex. You will also learn about and set up Thanos, a popular long-term storage system that integrates with Prometheus in an alternative way.
+
+Let's begin.
+
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain the main objectives of Prometheus's local TSDB.
+Discuss how the local TSDB arranges data on disk and guards against crashes.
+Point out limitations of Prometheus's local storage subsystem.
+
+Local Storage Overview
+The Prometheus server implements a highly-optimized custom time series database (TSDB) that stores its data on the server's local filesystem. This TSDB needs to be optimized for the use case of systems monitoring: ingesting current samples for all active series at the same time, and reading many sequential samples from a small subset of those series.
+
+This chapter will only cover the basic features of Prometheus's local storage implementation. If you would like to learn more details about its motivation and design, see this TSDB blog post by Fabian Reinartz.
+
+
+On-Disk Layout
+The Prometheus TSDB holds the most recent 2-3 hours of samples entirely in memory and persists older data to local disk as blocks of two hours each. Prometheus later compacts multiple smaller blocks into larger ones. Prometheus also ensures crash-resilience using a write-ahead log (WAL) and uses a lock file to ensure that only one process is accessing the TSDB at the same time.
+
+This is what the contents of an example TSDB storage directory look like:
+
+data/lock
+data/queries.active
+data/wal/000001
+data/wal/000002
+data/wal/000003
+data/wal/000004
+data/wal/checkpoint.000000
+data/wal/checkpoint.000000/00000000
+data/01CKX4PQCZMNT9Z1MSVAQK28R3/meta.json
+data/01CKX4PQCZMNT9Z1MSVAQK28R3/index
+data/01CKX4PQCZMNT9Z1MSVAQK28R3/chunks
+data/01CKX4PQCZMNT9Z1MSVAQK28R3/chunks/000001
+data/01CKX4PQCZMNT9Z1MSVAQK28R3/chunks/000002
+data/01CKX4PQCZMNT9Z1MSVAQK28R3/tombstones
+data/01CKWXV08Z3KQQ2P84NMQ6J8YV/meta.json
+data/01CKWXV08Z3KQQ2P84NMQ6J8YV/index
+data/01CKWXV08Z3KQQ2P84NMQ6J8YV/chunks
+data/01CKWXV08Z3KQQ2P84NMQ6J8YV/chunks/000001
+data/01CKWXV08Z3KQQ2P84NMQ6J8YV/chunks/000002
+data/01CKWXV08Z3KQQ2P84NMQ6J8YV/tombstones
+data/01CKWG3HTTPC22440DBD9NAV77/meta.json
+data/01CKWG3HTTPC22440DBD9NAV77/index
+data/01CKWG3HTTPC22440DBD9NAV77/chunks
+data/01CKWG3HTTPC22440DBD9NAV77/chunks/000001
+data/01CKWG3HTTPC22440DBD9NAV77/chunks/000002
+data/01CKWG3HTTPC22440DBD9NAV77/tombstones
+
+Block Directory Layout
+Each persisted block is stored in its own subdirectory of the storage directory and includes four components. Click to learn more about these components.
+
+Block Components
+Close meta.json
+A meta.json metadata file in JSON format that describes the time range covered by this block and various statistics about the block.
+
+Close chunks
+A chunks directory containing sequentially numbered chunk files that store the time series bulk data (timestamp/value samples) in a custom binary format. Each chunk file can grow up to 512MiB and holds interspersed data for all series of the block.
+
+Close index
+An index file that indexes the label names, label values, and time ranges of the sample data in the chunks directory in a custom binary format. This enables efficient search and retrieval of sample data.
+
+Close tombstones
+A tombstones file in a custom binary format. This is the only mutable part of a chunk directory and allows for the deletion of individual series via Prometheus's HTTP API. Instead of actually removing series data from a block's immutable chunk files and the index, series are recorded as "deleted" in the tombstones file and no longer returned in query results. When Prometheus compacts smaller blocks into larger ones, this series data is expunged for good and the tombstone entries removed.
+
+Each block directory is named after a Universally Unique Lexicographically Sortable Identifier (ULID) of the form 01CKM0QAXFCC5CKEDJEDBNQWQ4.
+
+
+
+Compaction
+While persisted blocks initially cover two hours of data each, Prometheus periodically compacts existing blocks into progressively larger blocks in the background. Compaction increases block time ranges by a factor of 3 for each level of compaction by combining the data of three existing smaller blocks and writing them out as a single larger one (the smaller source blocks are removed). The maximum block size that compaction can produce is limited to either 10% of the Prometheus server's configured data retention time or 1640.25 days (2 * 3⁹ hours), whichever limit applies first.
+
+Since every block has its own separate index, compaction lowers the total number of indexes that a query over older data has to consult. If series identities stay largely the same over time, compaction also means that each series has to be indexed fewer times.
+
+
+In-Memory Appends and Crash Resilience
+Prometheus keeps recent data in memory before it can write it out into immutable two-hour blocks. This enables efficient in-memory appends of current incoming sample data to many series at once. However, it would mean losing multiple hours of monitoring data if the Prometheus server was shut down or it crashed. To protect against this, Prometheus also writes all samples that have not been fully persisted to a block yet into a write-ahead log (WAL). The WAL is stored in the wal subdirectory of the storage directory and consists of 128MiB-sized segments of incoming sample data. When the Prometheus server restarts after a shutdown or crash, it recovers by reading the WAL and rebuilding the previous in-memory representation of recent sample data from it. Data in the WAL can be purged when it has been fully persisted into a block.
+
+
+Locking
+The Prometheus TSDB can only be safely accessed by one process at a time, as concurrent access would cause data corruption. To prevent concurrent access, a Prometheus server opening a TSDB directory attempts to acquire a file lock on an empty lock file in the storage directory. This only succeeds when no other process is currently holding this lock file.
+
+
+
+Active Queries File
+In the queries.active file, the Prometheus server keeps an up-to-date record of its currently running PromQL queries. This file is especially useful in case the server crashes due to running out of memory when processing an expensive query. When Prometheus restarts, it reads the queries.active file and logs information about any queries that didn't finish in the server's last run. This can help you find the potentially problematic queries that caused the server to crash.
+
+
+Limitations
+An important limitation of Prometheus's local TSDB is that it is neither clustered nor automatically replicated onto other nodes. Each Prometheus server only stores data on its own local filesystem (although the storage directory may be a network-based volume). That means that if you lose a Prometheus server due to a faulty disk or other problem, you will lose all data associated with that node. It also means that the scalability of a Prometheus server is limited to the capacity of a single node. See the later chapter on remote storage integrations for ways to work around this externally.
+
+
+Operational Aspects
+The local storage subsystem relies on sensible default settings and only exposes a couple of tunables via command-line flags. The most important ones are:
+
+--storage.tsdb.path
+The base directory in which the local TSDB should store its data. Defaults to "data/"
+--storage.tsdb.retention.time
+How long Prometheus should keep samples in its TSDB. Defaults to 15 days
+--storage.tsdb.retention.size
+The maximum number of bytes to store before deleting old data
+--storage.tsdb.no-lockfile
+Allows switching off the use of a lock file for the TSDB, which is required for operating systems that don't support file locking
+--storage.tsdb.wal-compression
+Turn on compression for the write-ahead log. This saves disk space in favor of a little more CPU usage.
+An important thing to notice is that written-out block directories are completely self-contained and not referenced from other parts of the TSDB. It is completely safe to remove individual block directories (when the Prometheus server is not running). This will remove data for the time range of the block, but will not affect any other data. This can be helpful in case one block is corrupted or cannot be read.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Explain how Prometheus integrates with remote storage systems.
+Set up a remote storage integration based on Cortex.
+Set up a remote storage integration based on Thanos.
+
+Remote Storage Interface
+As you have learned, Prometheus's local storage is limited in its scalability and durability. Instead of trying to solve long-term storage in Prometheus itself, Prometheus has a set of interfaces that allow integrating with remote long-term storage systems:
+
+Prometheus can write all samples that it ingests to a remote URL in a standardized format, in near-time (usually sample batches are sent every couple of seconds, read from the local storage's write-ahead log as a buffer)
+Prometheus can read back sample data from a remote URL in a standardized format and then run PromQL queries on it.
+ 
+
+
+Prometheus Remote read and write Interfaces
+
+ 
+
+The read and write protocols both use a snappy-compressed protocol buffer encoding over HTTP. The protocols are not considered as stable APIs yet and may change to use gRPC over HTTP/2 in the future, when all hops between Prometheus and the long-term storage can safely be assumed to support HTTP/2.
+
+For details on the request and response messages, see the remote storage protocol buffer definitions.
+
+ 
+
+🚩
+On the read path, Prometheus only fetches raw series data for a set of label selectors and time ranges from the remote end. All PromQL evaluation on the raw data still happens in Prometheus itself. This means that remote read queries have some scalability limit, since all necessary data needs to be loaded into the querying Prometheus server first and then processed there. However, supporting fully distributed evaluation of PromQL was deemed infeasible for the time being.
+
+
+Remote Storage via Thanos
+Prometheus's standard remote-write-based storage protocol has some drawbacks: it is relatively inefficient to send samples in near-time to a remote endpoint, because time series identities need to be sent along with their samples on every write, and sample data also compresses better when batching up many samples for the same series over time. Furthermore, the receiving end needs to reimplement Prometheus-style batching of ingested time series data, before it can write out persisted blocks of final data in a more optimized way. This means that receivers of the remote write protocol are usually relatively complex systems.
+
+Thanos is a popular alternative for providing durable long-term storage for Prometheus that does not require integrating with Prometheus's remote write protocol. Instead, it runs as a sidecar next to your existing Prometheus servers and ships fully persisted TSDB blocks from disk to a remote storage system like S3 or GCS. This allows Thanos to skip the reimplementation of the ingestion batching layer (it takes advantage of the fact that Prometheus is already doing this locally), and it can ship data more efficiently. Thanos then provides other components that allow an integrated query view over both the long-term storage (shipped blocks) and the more recent data that is still being batched up in Prometheus servers.
+
+Thanos's main features are:
+
+Scalable and durable long-term storage
+Global query view
+Deduplicating query data from HA pairs.
+A simplified architecture (eliding several optional components) of Thanos looks like this:
+
+ 
+
+
+Simplified Thanos Architecture
+
+ 
+
+In this architecture, the Thanos Sidecar component ships TSDB blocks to the object storage system, the Thanos Store component is in charge of reading back block data from the object storage, and the Thanos Query component provides an integrated querying view.
+
+For a full overview of Thanos, see the slides of this introductory talk.
+
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Alert based on Prometheus metrics from an existing monitoring system like Nagios.
+Ingest existing instrumentation from other monitoring systems into Prometheus.
+Send Prometheus metrics data to other time series databases.
+
+Overview
+When transitioning from previous monitoring systems to Prometheus, it is usually not feasible to switch over all monitoring to Prometheus at once. It is also possible that an organization only wants to use Prometheus for a subset of its functionality. In both cases, you need to integrate Prometheus with other systems so that a gradual migration or partial usage is possible. Fortunately, Prometheus offers several open integration points for this. In this chapter, you will learn about some examples.
+
+Alerting on Prometheus Metrics from Another Alerting System
+Many companies use Nagios or similar check-based monitoring systems for fault detection and alerting. Perhaps your company is introducing Prometheus for collecting metrics, but is not ready for a complete switch-over to native Prometheus alerting yet. Still, you could improve your Nagios alerts if you could base them on data collected by Prometheus. One way to achieve this is by using the Prometheus Nagios plugin that lets Nagios run a PromQL expression query against any Prometheus server and interpret the query result as a Nagios status code of either OK, WARNING, CRITICAL, or UNKNOWN.
+
+The plugin's README.md has precise instructions on how to configure this. A similar approach would work for other Nagios-like alerting systems.
+
+ 
+
+
+Nagios Querying Prometheus Using a Plugin
+
+
+Adapting Existing Instrumentation to Prometheus: StatsD Metrics
+If you have existing services sending StatsD metrics and are not ready to instrument them with native Prometheus metrics yet, you can replace the traditional StatsD server with Prometheus’s StatsD Exporter. This exporter receives events in the StatsD wire protocol and aggregates them into Prometheus metrics. A configuration file allows mapping the hierarchical StatsD metrics format into labeled Prometheus metrics.
+
+You can deploy the StatsD exporter in two ways:
+
+Completely replace an existing StatsD server with the exporter
+Configure an existing StatsD server to duplicate all incoming events to the exporter.
+The latter setup is useful in case you still want to use StatsD to write out data points to Grafana or a similar non-Prometheus time series database for the time being.
+
+ 
+
+
+StatsD Exporter Architecture
+
+Adapting Existing Instrumentation to Prometheus: Graphite Metrics
+If you have services that are directly writing metrics into a Graphite time series database, you can use the Graphite Exporter to receive the Graphite wire protocol and expose the incoming metrics in a Prometheus-compatible format.
+
+A similar mapping from Graphite's hierarchical format to Prometheus's label-based format is possible here, as in the StatsD exporter case.
+
+ 
+
+
+Graphite Exporter Architecture
+
+Ingesting Prometheus Metrics into Other TSDBs
+Perhaps you are already instrumenting your services with native Prometheus metrics, but still want to also ingest those metrics into another time series database. There are two main approaches to achieve this:
+
+You can use an alternative exposition mechanism together with the instrumentation part of the Prometheus client library you are using. For example, Prometheus’s Go client library already supports also pushing its samples to Graphite. The same is true for the Python client library
+You can use Prometheus's remote write and read interfaces (discussed earlier) to replicate all samples that a Prometheus server scrapes into another time series database.
+
+
+Other Integration Possibilities
+Since Prometheus is an open source software and openly documents many of the protocols and interfaces between its components, there are countless other ways of integrating Prometheus with other systems. The Prometheus documentation on integrations provides details on several more of these integration types and concrete systems that implement them.
+
+Learning Objectives
+By the end of this chapter, you should be able to:
+
+Discuss the need for making sure that your monitoring setup is working correctly.
+Inspect and interpret the Prometheus server's logs.
+Create a metrics-based meta-monitoring setup for monitoring the health of your Prometheus and Alertmanager servers.
+Investigate deeper performance issues or bugs using profiling tools.
+
+Overview
+Who watches the watchers? Prometheus and Alertmanager are critical components - if they are down or misbehave, you will not receive notifications about anything else being broken in your infrastructure. In this chapter you will learn how to troubleshoot, monitor, and diagnose your Prometheus servers themselves.
+
+Metrics-Based Meta-Monitoring
+Prometheus exposes a set of white-box metrics about itself on its /metrics path that allow diagnosing how it is performing and what is happening inside it. You can store and query those metrics by making Prometheus scrape itself, but this only works as long as that particular Prometheus server is working fine. To reliably alert when a Prometheus server is misbehaving, it is better to set up a separate meta-monitoring Prometheus server (or set of them) that does nothing else than monitoring all of your other Prometheus servers.
+
+ 
+
+
+Prometheus Meta-Monitoring Setup
+
+ 
+
+You can then configure a set of meta-monitoring rules that alert you when one of the Prometheus servers behaves badly. Let’s have a look at some example alerts you could configure. The following alerting rule alerts you when a Prometheus server has not been ingesting any samples in the last five minutes:
+
+groups:
+- name: meta-monitoring
+ rules:
+ - alert: PrometheusNotIngestingSamples
+   expr: |
+     rate(prometheus_tsdb_head_samples_appended_total{job=~"prometheus.*"}[5m]) == 0
+   for: 5m
+   labels:
+     severity: critical
+   annotations:
+     title: "{{$labels.job}} is not ingesting samples"
+     description: "{{$labels.job}} at {{$labels.instance}} has not ingested any samples in the last 10 minutes."
+     runbook: "troubleshooting/prometheus-not-ingesting.md"
+
+Or what about notifications to the Alertmanager being dropped? You could alert on that with this rule:
+
+groups:
+- name: meta-monitoring
+ rules:
+ - alert: PrometheusNotificationFailures
+   expr: |
+     rate(prometheus_notifications_dropped_total{job=~"prometheus.*"}[5m]) > 0
+   for: 5m
+   labels:
+     severity: critical
+   annotations:
+     title: "{{$labels.job}} is failing to send alert notifications"
+     description: "{{$labels.job}} at {{$labels.instance}} has failed to send {{$value}}/s alert notification notifications in the last 5 minutes."
+     runbook: "troubleshooting/prometheus-notification-failures.md"
+
+To be extra safe, create a highly available setup for your meta-monitoring. You can find a more extensive set of Prometheus meta-monitoring rules in GitLab's alerting rules.
+
+Alertmanager can be monitored in a similar way, as it also exposes metrics about itself. The question is what to do when your Alertmanager cluster or all of your Prometheus servers fail entirely. One answer to this is to use a constantly firing heartbeat alert in combination with an external party that notifies you when the alert notification is no longer being received. This approach is called a “dead man’s switch”, and an example implementation is discussed in a PromCon lightning talk by Matthias Rampke.
+
+
+
